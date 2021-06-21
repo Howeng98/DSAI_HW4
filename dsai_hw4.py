@@ -12,16 +12,6 @@ Original file is located at
 from google.colab import drive
 drive.mount('/content/drive')
 
-"""
-
-1.   prepare X, and Y
-2.   seperate it into train and test set
-3.   setup xgboost parameters
-4.   fit data
-5.   predict
-
-"""
-
 import os
 import sys
 import numpy as np
@@ -82,9 +72,10 @@ print(order_of_test.head(10))
 test_data = orders_DF.merge(previous_order_of_test, how='inner', on=['order_id','user_id'])
 # print(test_data.shape)
 test_data = test_data.merge(prior_order_DF, how='inner', on='order_id')
+test_data = test_data.merge(products_DF, how='left', on='product_id')
 # print(test_data.shape)
 
-test_data = test_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','reordered']]
+test_data = test_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id','reordered']]
 test_data = test_data.sort_values(by=['user_id','order_id','product_id'])
 # print(test_data.head(10))
 test_data = test_data.set_index(['user_id','product_id'])
@@ -92,22 +83,15 @@ print(test_data.head(10))
 print(test_data.shape)
 
 train_data = orders_DF.merge(train_order_DF, how='inner', on='order_id')
-train_data = train_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','reordered']]
+train_data = train_data.merge(products_DF, how='left', on='product_id')
+train_data = train_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id','reordered']]
 train_data = train_data.set_index(['user_id','product_id'])
 print(train_data.head(10))
-print(train_data.columns)
 print(train_data.shape)
 
-# print(train_data.isna().any())
-# print(test_data.isna().any())
-
 train_data = train_data.drop(['eval_set','order_id'], axis=1)
-
-
-X = train_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order']]
+X = train_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id']]
 Y = train_data['reordered'].astype(np.int)
-print(X)
-print(Y)
 
 x_train, x_validate, y_train, y_validate = train_test_split(X,Y , test_size = 0.2, random_state=42)
 print(x_train.shape)
@@ -116,12 +100,12 @@ print(x_validate.shape)
 print(y_validate.shape)
 
 test_data = test_data.drop(['eval_set','order_id'], axis=1)
-x_test = test_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order']]
+x_test = test_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id']]
 y_test = test_data['reordered'].astype(np.int)
 
 parameters = {'eval_metric':'logloss', 
               'max_depth':'5', 
-              'colsample_bytree':'0.5',    # 0.4
+              'colsample_bytree':'0.5',
               'subsample':'0.75',
               'gpu_id':'0',
               'tree_method':'gpu_hist'
