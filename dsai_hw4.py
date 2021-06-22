@@ -12,37 +12,17 @@ Original file is located at
 from google.colab import drive
 drive.mount('/content/drive')
 
-"""
-
-1.   prepare X, and Y
-2.   seperate it into train and test set
-3.   setup xgboost parameters
-4.   fit data
-5.   predict
-
-"""
-
 import os
 import sys
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout, Flatten, Conv2D, MaxPool2D, BatchNormalization, Activation
-from keras.optimizers import Adam, SGD
-from sklearn.preprocessing import MinMaxScaler
-from statistics import mean
-from keras import backend as K
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
-from keras.callbacks import Callback
 from sklearn.model_selection import train_test_split
-from tqdm import tqdm 
-from keras.utils import np_utils
 import xgboost as xgb
-import gc
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option('display.max_colwidth',1000)
+
+pip freeze > requirements.txt
 
 main_path = 'drive/MyDrive/Colab Notebooks/dsai_hw4/dataset'
 
@@ -76,60 +56,74 @@ print(previous_order_of_test.shape)
 print(order_of_test.shape)
 previous_order_of_test = pd.DataFrame(previous_order_of_test, columns = ['order_id','user_id'])
 order_of_test = pd.DataFrame(order_of_test, columns = ['order_id','user_id'])
-print(previous_order_of_test.head(10))
-print(order_of_test.head(10))
+# print('Previous_order_of_test:')
+# previous_order_of_test
+# print('Order_of_test:')
+# order_of_test
 
 test_data = orders_DF.merge(previous_order_of_test, how='inner', on=['order_id','user_id'])
 # print(test_data.shape)
 test_data = test_data.merge(prior_order_DF, how='inner', on='order_id')
+test_data = test_data.merge(products_DF, how='left', on='product_id')
 # print(test_data.shape)
 
-test_data = test_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','reordered']]
+
+
+# test_data['aisle_id'].value_counts()
+# for row in test_data.iterrows():
+#   if test_data['user_id'][row]
+
+test_data = test_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id','reordered']]
 test_data = test_data.sort_values(by=['user_id','order_id','product_id'])
 # print(test_data.head(10))
 test_data = test_data.set_index(['user_id','product_id'])
-print(test_data.head(10))
-print(test_data.shape)
+# print(test_data.head(10))
+# print(test_data.shape)
+# test_data
+
+# later move up
+# aisle_count = test_data[test_data['user_id']==4]['aisle_id'].value_counts()
+# print(aisle_count.sort_values())
+# aisle_prefer_list.insert([aisle_count[:][:3]])
+# print(aisle_prefer_list)
 
 train_data = orders_DF.merge(train_order_DF, how='inner', on='order_id')
-train_data = train_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','reordered']]
+train_data = train_data.merge(products_DF, how='left', on='product_id')
+train_data = train_data[['user_id','order_id','product_id','add_to_cart_order','order_number','eval_set','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id','reordered']]
 train_data = train_data.set_index(['user_id','product_id'])
-print(train_data.head(10))
-print(train_data.columns)
-print(train_data.shape)
-
-# print(train_data.isna().any())
-# print(test_data.isna().any())
+# print(train_data.head(10))
+# print(train_data.shape)
+# train_data
 
 train_data = train_data.drop(['eval_set','order_id'], axis=1)
-
-
-X = train_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order']]
+X = train_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id']]
 Y = train_data['reordered'].astype(np.int)
-print(X)
-print(Y)
 
 x_train, x_validate, y_train, y_validate = train_test_split(X,Y , test_size = 0.2, random_state=42)
+print('x_train:')
 print(x_train.shape)
+print('y_train:')
 print(y_train.shape)
+print('x_validate:')
 print(x_validate.shape)
+print('y_validate:')
 print(y_validate.shape)
 
 test_data = test_data.drop(['eval_set','order_id'], axis=1)
-x_test = test_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order']]
+x_test = test_data[['add_to_cart_order','order_number','order_dow','order_hour_of_day','days_since_prior_order','aisle_id','department_id']]
 y_test = test_data['reordered'].astype(np.int)
 
 parameters = {'eval_metric':'logloss', 
               'max_depth':'5', 
-              'colsample_bytree':'0.5',    # 0.4
-              'subsample':'0.75',
+              'colsample_bytree':'0.5',
+              'subsample':'0.80',
               'gpu_id':'0',
               'tree_method':'gpu_hist'
              }
 
 print(x_train.shape)
 print(y_train.shape)
-XGB = xgb.XGBClassifier(objective='binary:logistic', parameters=parameters, num_boost_round=10)
+XGB = xgb.XGBClassifier(objective='binary:logistic', parameters=parameters, num_boost_round=50)
 model = XGB.fit(x_train, y_train)
 print(model)
 xgb.plot_importance(model)
@@ -154,21 +148,21 @@ print(y_pred.shape)
 
 # prepare submission's dataframe
 submission_table = orders_DF.loc[orders_DF['eval_set'] == 'test', ['user_id','order_id']]
-print(submission_table.head(10))
+# print(submission_table.head(10))
 
 y_pred = pd.DataFrame(y_pred, columns=['reordered'])
 
 test_data2 = test_data.drop(['reordered'], axis=1)
 test_data2 = test_data2.reset_index()
 test_data2['reordered'] = y_pred
-print(test_data2.head(10))
+# print(test_data2.head(10))
 # test_data2 = test_data2.set_index(['user_id','product_id'])
 
 
 submission_table = submission_table.merge(test_data2, how='left', on='user_id')
-print(submission_table)
+# print(submission_table)
 submission_table = submission_table[['order_id','product_id','reordered']]
-print(submission_table)
+# print(submission_table)
 
 output_result = dict()
 for row in submission_table.itertuples():
@@ -186,5 +180,5 @@ submission = pd.DataFrame.from_dict(output_result, orient='index')
 submission.reset_index(inplace=True)
 submission.columns = ['order_id','products']
 # print(submission.head(50))
-submission
+# submission
 submission.to_csv('submission.csv',index=False)
